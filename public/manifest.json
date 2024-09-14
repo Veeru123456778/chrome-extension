@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "version": "1.0.0",
+  "name": "My Vite Extension",
+  "action": {
+    "default_popup": "index.html"
+  },
+  "permissions": [
+    "alarms",
+    "scripting",
+    "activeTab",
+    "identity",
+    "tabs",
+    "storage"
+    ],
+  "oauth2": {
+    "client_id": "11577713610-hikcmikgrqtvreloovjeb23ofep4m7l3.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/youtube.readonly"
+    ]
+  },
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "scripts/background.js"
+  },
+  "content_scripts": [
+    {
+      "js": ["scripts/content.js", "scripts/monitor-playback.js"],
+      "matches": [
+        "https://youtube.com/*",
+        "http://youtube.com/*",
+        "*://*.youtube.com/watch*"
+      ]
+    }
+  ],
+  "icons": {
+    "16": "icon16.jpg",
+    "48": "icon48.jpg",
+    "128": "icon128.jpg"
+  }
+}
+
