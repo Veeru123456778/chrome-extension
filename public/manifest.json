@@ -1,45 +1,46 @@
 {
   "manifest_version": 3,
+  "name": "YouTube Study Time Tracker",
   "version": "1.0.0",
-  "name": "My Vite Extension",
-  "action": {
-    "default_popup": "index.html"
-  },
+  "description": "Monitor YouTube activity to track study time vs fun time and improve productivity",
   "permissions": [
-    "alarms",
-    "scripting",
+    "storage",
     "activeTab",
-    "identity",
+    "scripting",
     "tabs",
-    "storage"
-    ],
-  "oauth2": {
-    "client_id": "11577713610-hikcmikgrqtvreloovjeb23ofep4m7l3.apps.googleusercontent.com",
-    "scopes": [
-      "https://www.googleapis.com/auth/youtube.readonly"
-    ]
-  },
+    "background",
+    "notifications"
+  ],
   "host_permissions": [
-    "http://*/*",
-    "https://*/*"
+    "*://www.youtube.com/*",
+    "*://youtube.com/*",
+    "*://www.googleapis.com/*"
   ],
   "background": {
-    "service_worker": "scripts/background.js"
+    "service_worker": "service-worker.js",
+    "type": "module"
   },
   "content_scripts": [
     {
-      "js": ["scripts/content.js", "scripts/monitor-playback.js"],
-      "matches": [
-        "https://youtube.com/*",
-        "http://youtube.com/*",
-        "*://*.youtube.com/watch*"
-      ]
+      "matches": ["*://www.youtube.com/*", "*://youtube.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
     }
   ],
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "YouTube Study Tracker"
+  },
   "icons": {
-    "16": "icon16.jpg",
-    "48": "icon48.jpg",
-    "128": "icon128.jpg"
-  }
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["assets/*"],
+      "matches": ["*://www.youtube.com/*", "*://youtube.com/*"]
+    }
+  ]
 }
 
