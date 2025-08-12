@@ -1,221 +1,220 @@
-# YouTube Study Time Tracker - Chrome Extension
+# YouTube Study Time Tracker Extension
 
-A comprehensive Chrome extension that monitors YouTube activity in real-time to track study time vs fun time, helping users improve their productivity.
+A Chrome extension that helps you track and manage your YouTube viewing time by distinguishing between educational/study content and entertainment content.
 
-## 🚀 Features
+## Features
 
-### ✅ Core Functionality
-- **Real-time YouTube activity monitoring** - Automatically detects when you watch YouTube videos
-- **Smart video categorization** - Uses YouTube Data API + NLP to classify videos as study or fun content
-- **Study area configuration** - Set your main study area (Computer Science, Medical, Law, etc.) for accurate tracking
-- **Time tracking with precision** - Only tracks actual watch time (no cheating via pausing, muting, or skipping)
-- **Multiple tab support** - Handles multiple YouTube tabs and videos independently
+- **Automatic Video Classification**: Uses YouTube API to classify videos as study-related or entertainment
+- **Time Tracking**: Tracks study time vs fun time separately
+- **Fun Time Limits**: Sets daily limits for entertainment content based on study time
+- **Video Blocking**: Blocks entertainment videos when daily limits are exceeded
+- **Progress Monitoring**: Visual dashboard showing your study vs fun time balance
+- **Smart Detection**: Only counts time when videos are actually playing and you're actively viewing
 
-### 📊 Analytics & Visualization
-- **Beautiful pie chart** (Chart.js) showing daily study vs fun time breakdown
-- **Productivity percentage** - Real-time calculation of your daily productivity
-- **Comprehensive statistics** - Total study time, fun time, and remaining fun time
-- **Time formatting** - Smart time display (seconds, minutes, hours)
+## Recent Improvements (Latest Update)
 
-### ⏰ Fun Time Management
-- **Configurable fun time limits** - Default 20 minutes of fun per hour of study
-- **Warning system** - Alerts when approaching fun time limit
-- **Smart blocking** - Automatically blocks videos when fun time limit is exceeded
-- **Video blocking overlay** - Prevents bypassing blocks with keyboard shortcuts
+### Enhanced Video Detection
+- Improved detection of YouTube video pages with multiple fallback methods
+- Better handling of YouTube's SPA navigation
+- Periodic URL checking as backup for missed navigation events
 
-### 🎯 Smart Classification
-- **YouTube API integration** - Fetches video categories and metadata
-- **NLP analysis** - Analyzes video titles, descriptions, and tags
-- **Study area matching** - Relates content to your specific field of study
-- **User feedback** - Ask user when classification is uncertain
-- **Fallback detection** - Works even without API key using page content
+### Reliable Time Tracking
+- More accurate playback state detection
+- Visibility change tracking (only counts time when tab is visible)
+- Better handling of paused videos and background tabs
+- Improved session management and cleanup
 
-### 🔧 Advanced Features
-- **First-time setup flow** - Guided configuration for new users
-- **Settings management** - Easily update study area and fun time limits
-- **Data persistence** - All data stored locally using chrome.storage
-- **Session management** - Handles browser crashes, tab closes, and refreshes
-- **Edge case handling** - Robust handling of network issues, tab switching, etc.
+### Robust Communication
+- Enhanced message passing between content script and service worker
+- Better error handling and logging
+- Improved initialization sequence
 
-## 📦 Installation
+## Installation
 
-### From Source (Development)
+### Development Setup
 
-1. **Clone and build the extension:**
+1. **Clone the repository**
    ```bash
-   cd /workspace
+   git clone <repository-url>
+   cd youtube-study-tracker
+   ```
+
+2. **Install dependencies**
+   ```bash
    npm install
+   ```
+
+3. **Build the extension**
+   ```bash
    npm run build
    ```
 
-2. **Load in Chrome:**
+4. **Load in Chrome**
    - Open Chrome and go to `chrome://extensions/`
-   - Enable "Developer mode" (toggle in top-right)
+   - Enable "Developer mode" (toggle in top right)
    - Click "Load unpacked"
-   - Select the `dist` folder from the project
+   - Select the `dist` folder from this project
 
-3. **Grant permissions:**
-   - The extension will request permissions for YouTube access and storage
-   - Accept all permissions for full functionality
+### Production Installation
 
-### From Chrome Web Store
-*Coming soon - extension will be published after testing*
+1. Download the latest release
+2. Extract the files
+3. Follow steps 4-6 from development setup
 
-## 🛠️ Setup & Configuration
+## Configuration
 
-### First Time Setup
-1. Click the extension icon in your toolbar
-2. Select your main study area from the dropdown
-3. Adjust fun time limit (5-30 minutes per hour of study)
-4. (Optional) Add YouTube Data API key for better categorization
+### First-Time Setup
 
-### Getting YouTube API Key (Optional but Recommended)
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select existing one
-3. Enable YouTube Data API v3
-4. Create credentials (API Key)
-5. Add the API key in extension settings
+1. **Set Study Area**: When you first open a YouTube video, the extension will prompt you to set your study area (e.g., "Computer Science", "Mathematics", "History")
 
-## 📱 Usage
+2. **YouTube API Key** (Optional): For better video classification, you can add a YouTube API key in the settings
+
+3. **Fun Time Limit**: Set how many minutes of fun content you're allowed per hour of study time (default: 20 minutes)
+
+### Settings
+
+- **Study Area**: Your primary field of study for content classification
+- **Fun Time Limit**: Minutes of entertainment allowed per hour of study
+- **Notifications**: Enable/disable blocking notifications
+- **YouTube API Key**: For enhanced video classification (optional)
+
+## How It Works
+
+### Video Detection
+1. When you open a YouTube video page, the content script detects the video
+2. The service worker receives the video detection message
+3. Video information is fetched and classified as study or entertainment
+
+### Time Tracking
+1. **Study Videos**: Time is tracked and added to your study time
+2. **Entertainment Videos**: 
+   - If within daily limits: Time is tracked as fun time
+   - If limit exceeded: Video is blocked with an overlay
+
+### Smart Features
+- **Visibility Tracking**: Only counts time when the tab is visible
+- **Playback Detection**: Only counts time when video is actually playing
+- **Session Management**: Properly handles video changes and tab closures
+
+## Usage
 
 ### Daily Workflow
-1. **Start studying** - Open YouTube and watch educational content
-2. **Classification** - Extension automatically categorizes videos or asks for your input
-3. **Track progress** - Monitor your productivity in real-time via the popup
-4. **Fun time management** - Enjoy entertainment within your configured limits
 
-### Understanding the Interface
+1. **Start Studying**: Open educational YouTube videos related to your study area
+2. **Monitor Progress**: Click the extension icon to see your daily stats
+3. **Fun Time**: Watch entertainment videos within your daily limits
+4. **Stay Focused**: When limits are exceeded, entertainment videos are blocked
 
-#### Home Tab
-- **Productivity Circle** - Visual representation of your daily productivity percentage
-- **Time Summary** - Today's study time and fun time
-- **Activity Chart** - Pie chart showing time distribution
-- **Stats Grid** - Key metrics including remaining fun time
+### Dashboard Features
 
-#### Settings Tab
-- **Study Area** - Update your field of study
-- **Fun Time Limit** - Adjust minutes of fun per hour of study
-- **API Key** - Add/update YouTube Data API key
-- **Notifications** - Enable/disable notifications
+- **Daily Stats**: Study time vs fun time for today
+- **Total Stats**: Overall study and fun time
+- **Remaining Fun Time**: How much entertainment time you have left
+- **Progress Charts**: Visual representation of your time distribution
 
-#### Stats Tab
-- **Total Statistics** - All-time study and fun time
-- **Bar Chart** - Visual comparison of cumulative hours
-
-### Video Classification
-The extension uses a sophisticated classification system:
-
-1. **Automatic Classification:**
-   - Educational categories (Education, Science & Technology, News & Politics) → Usually study
-   - Entertainment categories → Usually fun
-   - Combines category data with content analysis
-
-2. **Manual Classification:**
-   - When uncertain, extension asks: "Is this related to your [study area] studies?"
-   - Your response helps improve future classifications
-
-3. **Content Analysis:**
-   - Analyzes video titles, descriptions, and tags
-   - Matches against study area keywords
-   - Uses NLP scoring system
-
-## 🔒 Privacy & Security
-
-- **Local storage only** - All data stored locally using Chrome's storage API
-- **No data collection** - Extension doesn't send any data to external servers
-- **API key security** - YouTube API key stored locally, never transmitted
-- **Minimal permissions** - Only requests necessary permissions for YouTube access
-
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Extension Not Working
-1. Check if extension is enabled in `chrome://extensions/`
-2. Refresh YouTube tabs after installation
-3. Ensure you're on a YouTube video page (`youtube.com/watch`)
 
-### Videos Not Being Detected
-1. Make sure you're on a video page (not homepage or search)
-2. Wait a few seconds for detection to trigger
-3. Check browser console for error messages
+1. **Check Console**: Open Developer Tools (F12) and check for errors
+2. **Reload Extension**: Go to `chrome://extensions/` and click the reload button
+3. **Check Permissions**: Ensure the extension has permission to access YouTube
+4. **Clear Cache**: Clear browser cache and reload the page
 
-### Classification Issues
-1. Add YouTube API key for better accuracy
-2. Manually classify a few videos to help the system learn
-3. Ensure your study area is set correctly
+### Video Not Detected
 
-### Time Tracking Problems
-1. Verify the video is actually playing (not paused)
-2. Check if you have multiple YouTube tabs open
-3. Extension only tracks when video is actively playing
+1. **Refresh Page**: Sometimes YouTube's dynamic loading can miss initial detection
+2. **Check URL**: Ensure you're on a YouTube video page (`youtube.com/watch?v=...`)
+3. **Wait for Load**: Give the page a moment to fully load
 
-## 🔧 Technical Details
+### Time Not Tracking
 
-### Architecture
-- **Manifest V3** - Modern Chrome extension standard
-- **Service Worker** - Background processing for time tracking
-- **Content Script** - YouTube page interaction and video detection
-- **React + TypeScript** - Modern popup interface
-- **Chart.js** - Data visualization
-- **Chrome Storage API** - Local data persistence
+1. **Check Tab Visibility**: Make sure the YouTube tab is visible (not minimized)
+2. **Verify Playback**: Ensure the video is actually playing (not paused)
+3. **Check Settings**: Verify your study area is set up correctly
 
-### File Structure
+### Common Issues
+
+- **"No study area set"**: Complete the first-time setup
+- **"Fun time limit exceeded"**: Study more to unlock additional fun time
+- **Videos not blocking**: Check that notifications are enabled in settings
+
+## Development
+
+### Project Structure
+
 ```
-dist/
-├── manifest.json          # Extension configuration
-├── service-worker.js      # Background time tracking
-├── content.js            # YouTube page interaction
-├── index.html            # Popup interface
-├── assets/               # CSS and JS bundles
-└── icons/               # Extension icons
+src/
+├── content.ts          # Content script for YouTube pages
+├── service-worker.ts   # Background service worker
+├── App.tsx            # Extension popup UI
+├── utils/
+│   ├── storage.ts     # Data storage utilities
+│   └── youtube-api.ts # YouTube API integration
+└── assets/            # UI assets and styles
 ```
 
-### Data Storage
-All data is stored locally using Chrome's storage API:
-- Settings (study area, fun time limit, API key)
-- Time statistics (daily and total time)
-- Active sessions (current video tracking)
-- Session history (past video sessions)
+### Key Components
 
-## 📈 Roadmap
+- **Content Script**: Detects videos, monitors playback, handles UI overlays
+- **Service Worker**: Manages sessions, tracks time, handles classification
+- **Storage**: Chrome storage API for settings and statistics
+- **YouTube API**: Video information and classification
 
-### Planned Features
-- **Weekly/Monthly statistics** - Extended time period analysis
-- **Goal setting** - Set daily study time goals
-- **Streaks tracking** - Monitor consecutive productive days
-- **Export data** - Download your statistics
-- **Improved NLP** - Better content classification
-- **Custom categories** - User-defined video categories
-- **Focus mode** - Temporarily block all fun content
+### Building
 
-### Known Limitations
-- Requires active internet for YouTube API features
-- Limited to YouTube platform only
-- Some videos may require manual classification
-- Fun time blocking can be bypassed by disabling the extension
+```bash
+# Development build with watch mode
+npm run dev
 
-## 🤝 Contributing
+# Production build
+npm run build
 
-We welcome contributions! Here's how you can help:
+# Linting
+npm run lint
+```
 
-1. **Report bugs** - Open issues with detailed descriptions
-2. **Suggest features** - Propose new functionality
-3. **Improve classification** - Help enhance the NLP algorithms
-4. **UI/UX improvements** - Make the interface more user-friendly
-5. **Documentation** - Help improve this guide
+## API Requirements
 
-## 📄 License
+### YouTube Data API v3 (Optional)
+
+For enhanced video classification, you can provide a YouTube API key:
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select existing
+3. Enable YouTube Data API v3
+4. Create credentials (API Key)
+5. Add the key in extension settings
+
+**Note**: The extension works without an API key but with basic classification only.
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## 🙏 Acknowledgments
+## Support
 
-- **Chart.js** - Beautiful data visualization
-- **YouTube Data API** - Video metadata and categorization
-- **React ecosystem** - Modern UI development
-- **Chrome Extensions API** - Powerful browser integration
+If you encounter issues or have questions:
 
----
+1. Check the troubleshooting section above
+2. Review the console logs for error messages
+3. Open an issue on GitHub with detailed information
 
-**Happy studying! 📚✨**
+## Changelog
 
-*Made with ❤️ to help students stay productive while enjoying YouTube*
+### Latest Version (1.0.0)
+- ✅ Enhanced video detection reliability
+- ✅ Improved time tracking accuracy
+- ✅ Better visibility change handling
+- ✅ Robust session management
+- ✅ Enhanced error handling and logging
+- ✅ Improved SPA navigation detection
+- ✅ Better playback state monitoring

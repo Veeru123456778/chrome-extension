@@ -24,7 +24,7 @@ import {
 export interface Message {
   type: 'VIDEO_DETECTED' | 'TIME_UPDATE' | 'VIDEO_ENDED' | 'TAB_CLOSED' | 
         'CLASSIFICATION_REQUEST' | 'CLASSIFICATION_RESPONSE' | 'BLOCK_VIDEO' | 
-        'GET_SETTINGS' | 'UPDATE_SETTINGS' | 'GET_STATS' | 'INIT_CHECK';
+        'GET_SETTINGS' | 'UPDATE_SETTINGS' | 'GET_STATS' | 'INIT_CHECK' | 'VISIBILITY_CHANGE';
   data?: any;
   tabId?: number;
   videoId?: string;
@@ -38,6 +38,7 @@ interface TabSession {
   startTime: number;
   lastUpdateTime: number;
   classification: 'study' | 'fun' | 'unknown';
+  isVisible: boolean;
 }
 
 // Track active sessions in memory for quick access
@@ -102,11 +103,14 @@ async function cleanupStaleSessions(): Promise<void> {
  * Handle video detection from content script
  */
 async function handleVideoDetected(message: Message, sender: chrome.runtime.MessageSender): Promise<void> {
-  if (!sender.tab?.id || !message.data?.url) return;
+  if (!sender.tab?.id || !message.data?.url) {
+    console.warn('Invalid video detection message:', message);
+    return;
+  }
   
   const tabId = sender.tab.id;
   const url = message.data.url;
-  const videoId = extractVideoId(url);
+  const videoId = message.data.videoId || extractVideoId(url);
   
   if (!videoId) {
     console.warn('Could not extract video ID from URL:', url);
@@ -180,7 +184,8 @@ async function handleVideoDetected(message: Message, sender: chrome.runtime.Mess
       isBlocked: false,
       startTime: Date.now(),
       lastUpdateTime: Date.now(),
-      classification: videoClassification
+      classification: videoClassification,
+      isVisible: true // Assume visible when detected
     });
     
   } catch (error) {
@@ -270,6 +275,25 @@ async function stopTimeTracking(tabId: number): Promise<void> {
 }
 
 /**
+ * Handle visibility change from content script
+ */
+async function handleVisibilityChange(message: Message, sender: chrome.runtime.MessageSender): Promise<void> {
+  if (!sender.tab?.id) return;
+  
+  const tabId = sender.tab.id;
+  const isVisible = message.data?.isVisible;
+  
+  console.log(`Tab ${tabId} visibility changed to: ${isVisible}`);
+  
+  // Update tab session visibility
+  const tabSession = activeTabSessions.get(tabId);
+  if (tabSession) {
+    tabSession.isVisible = isVisible;
+    activeTabSessions.set(tabId, tabSession);
+  }
+}
+
+/**
  * Update session time and check for fun time limit
  */
 async function updateSessionTime(tabId: number, isEnding: boolean = false): Promise<void> {
@@ -277,19 +301,38 @@ async function updateSessionTime(tabId: number, isEnding: boolean = false): Prom
     const activeSessions = await getActiveSessions();
     const session = activeSessions[tabId.toString()];
     
-    if (!session) return;
-    
-    // Check if video is actually playing by asking content script
-    const response = await chrome.tabs.sendMessage(tabId, { type: 'GET_PLAYBACK_STATE' })
-      .catch(() => ({ isPlaying: false, currentTime: 0 }));
-    
-    if (!response.isPlaying && !isEnding) {
-      // Video is paused, don't count time
+    if (!session) {
+      console.log(`No active session found for tab ${tabId}`);
       return;
     }
     
+    // Check if video is actually playing by asking content script
+    let isPlaying = false;
+    let currentTime = 0;
+    
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, { type: 'GET_PLAYBACK_STATE' });
+      isPlaying = response?.isPlaying || false;
+      currentTime = response?.currentTime || 0;
+    } catch (error) {
+      console.log(`Could not get playback state for tab ${tabId}, assuming not playing`);
+      isPlaying = false;
+    }
+    
+    // Check if tab is visible
+    const tabSession = activeTabSessions.get(tabId);
+    const isVisible = tabSession?.isVisible ?? true; // Default to true if not set
+    
     const now = Date.now();
     const timeElapsed = Math.floor((now - session.startTime) / 1000); // in seconds
+    
+    // Only count time if video is playing, tab is visible, and user is actively viewing
+    if (!isPlaying || !isVisible) {
+      if (!isEnding) {
+        console.log(`Not counting time for tab ${tabId}: playing=${isPlaying}, visible=${isVisible}`);
+        return;
+      }
+    }
     
     // Update session
     const updatedSession: VideoSession = {
@@ -300,10 +343,19 @@ async function updateSessionTime(tabId: number, isEnding: boolean = false): Prom
     
     await updateActiveSession(tabId, updatedSession);
     
-    // Add time to appropriate category
-    const incrementalTime = Math.floor((now - (session.startTime + session.watchTime * 1000)) / 1000);
+    // Calculate incremental time since last update
+    const lastUpdateTime = activeTabSessions.get(tabId)?.lastUpdateTime || session.startTime;
+    const incrementalTime = Math.floor((now - lastUpdateTime) / 1000);
+    
     if (incrementalTime > 0) {
+      console.log(`Adding ${incrementalTime} seconds of ${session.isStudyRelated ? 'study' : 'fun'} time for tab ${tabId}`);
       await addTime(session.isStudyRelated, incrementalTime);
+      
+      // Update last update time
+      if (tabSession) {
+        tabSession.lastUpdateTime = now;
+        activeTabSessions.set(tabId, tabSession);
+      }
     }
     
     // Check fun time limit for fun videos
@@ -318,8 +370,10 @@ async function updateSessionTime(tabId: number, isEnding: boolean = false): Prom
     
     // If session is ending, move to history
     if (isEnding && timeElapsed > 10) { // Minimum 10 seconds to count
+      console.log(`Ending session for tab ${tabId} with ${timeElapsed} seconds watched`);
       await addSessionToHistory(updatedSession);
       await removeActiveSession(tabId);
+      activeTabSessions.delete(tabId);
     }
     
   } catch (error) {
@@ -480,6 +534,10 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
             isFirstTime: currentSettings.isFirstTime,
             hasStudyArea: !!currentSettings.studyArea 
           });
+          break;
+          
+        case 'VISIBILITY_CHANGE':
+          await handleVisibilityChange(message, sender);
           break;
           
         default:

@@ -25,6 +25,7 @@ class YouTubeTracker {
   private isBlocked: boolean = false;
   private classificationDialog: HTMLElement | null = null;
   private setupDialog: HTMLElement | null = null;
+  private urlCheckInterval: number | null = null;
   
   constructor() {
     console.log('YouTube Study Tracker Content Script Starting...');
@@ -33,6 +34,12 @@ class YouTubeTracker {
   
   private async init(): Promise<void> {
     try {
+      // Immediate check for video page
+      if (this.isVideoPage()) {
+        console.log('Initial video page detected');
+        await this.handleVideoPageLoad();
+      }
+      
       // Wait for page to be ready
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => this.startTracking());
@@ -45,6 +52,12 @@ class YouTubeTracker {
       
       // Setup message listener
       this.setupMessageListener();
+      
+      // Setup visibility change listener
+      this.setupVisibilityListener();
+      
+      // Periodic URL check as backup
+      this.startPeriodicUrlCheck();
       
     } catch (error) {
       console.error('Error initializing YouTube tracker:', error);
@@ -67,18 +80,47 @@ class YouTubeTracker {
   }
   
   private isVideoPage(): boolean {
-    return window.location.pathname === '/watch' && !!this.getVideoIdFromUrl();
+    const pathname = window.location.pathname;
+    const isWatchPage = pathname === '/watch' || pathname.startsWith('/watch?');
+    const hasVideoId = !!this.getVideoIdFromUrl();
+    console.log('Checking if video page:', { pathname, isWatchPage, hasVideoId });
+    return isWatchPage && hasVideoId;
   }
   
   private getVideoIdFromUrl(): string | null {
-    return extractVideoId(window.location.href);
+    const videoId = extractVideoId(window.location.href);
+    console.log('Extracted video ID from URL:', videoId);
+    return videoId;
+  }
+  
+  private startPeriodicUrlCheck(): void {
+    // Check URL every 2 seconds as backup
+    this.urlCheckInterval = window.setInterval(() => {
+      const currentUrl = window.location.href;
+      if (currentUrl !== this.currentUrl) {
+        console.log('URL changed via periodic check:', currentUrl);
+        this.currentUrl = currentUrl;
+        
+        if (this.isVideoPage()) {
+          this.handleVideoPageLoad();
+        } else {
+          this.cleanup();
+        }
+      }
+    }, 2000);
   }
   
   private async handleVideoPageLoad(): Promise<void> {
     const videoId = this.getVideoIdFromUrl();
     const url = window.location.href;
     
-    if (!videoId || (videoId === this.currentVideoId && url === this.currentUrl)) {
+    if (!videoId) {
+      console.log('No video ID found, not a video page');
+      return;
+    }
+    
+    if (videoId === this.currentVideoId && url === this.currentUrl) {
+      console.log('Same video already being tracked:', videoId);
       return; // Same video, no need to reprocess
     }
     
@@ -108,7 +150,9 @@ class YouTubeTracker {
       'video.video-stream',
       'video[src]',
       '.html5-video-container video',
-      '#movie_player video'
+      '#movie_player video',
+      'video[class*="video"]',
+      'video[class*="html5"]'
     ];
     
     for (const selector of selectors) {
@@ -123,7 +167,8 @@ class YouTubeTracker {
       }
     }
     
-    // If not found immediately, wait and try again
+    // If not found immediately, wait and try again with exponential backoff
+    console.log('Video element not found, retrying...');
     setTimeout(() => this.findVideoElement(), 1000);
   }
   
@@ -132,36 +177,50 @@ class YouTubeTracker {
     
     const video = this.videoElement;
     
+    // Remove existing listeners to avoid duplicates
+    video.removeEventListener('play', this.handlePlay);
+    video.removeEventListener('pause', this.handlePause);
+    video.removeEventListener('ended', this.handleEnded);
+    video.removeEventListener('timeupdate', this.handleTimeUpdate);
+    video.removeEventListener('seeking', this.handleSeeking);
+    
     // Video events
-    video.addEventListener('play', () => {
-      console.log('Video play event');
-      if (this.isBlocked) {
-        this.blockPlayback();
-      }
-    });
+    video.addEventListener('play', this.handlePlay);
+    video.addEventListener('pause', this.handlePause);
+    video.addEventListener('ended', this.handleEnded);
+    video.addEventListener('timeupdate', this.handleTimeUpdate);
+    video.addEventListener('seeking', this.handleSeeking);
     
-    video.addEventListener('pause', () => {
-      console.log('Video pause event');
-    });
-    
-    video.addEventListener('ended', () => {
-      console.log('Video ended');
-      this.notifyVideoEnded();
-    });
-    
-    video.addEventListener('timeupdate', () => {
-      if (this.isBlocked) {
-        this.blockPlayback();
-      }
-    });
-    
-    // Prevent seeking when blocked
-    video.addEventListener('seeking', () => {
-      if (this.isBlocked) {
-        video.currentTime = 0;
-      }
-    });
+    console.log('Video event listeners set up');
   }
+  
+  private handlePlay = (): void => {
+    console.log('Video play event');
+    if (this.isBlocked) {
+      this.blockPlayback();
+    }
+  };
+  
+  private handlePause = (): void => {
+    console.log('Video pause event');
+  };
+  
+  private handleEnded = (): void => {
+    console.log('Video ended');
+    this.notifyVideoEnded();
+  };
+  
+  private handleTimeUpdate = (): void => {
+    if (this.isBlocked) {
+      this.blockPlayback();
+    }
+  };
+  
+  private handleSeeking = (): void => {
+    if (this.isBlocked) {
+      this.videoElement!.currentTime = 0;
+    }
+  };
   
   private startPlaybackMonitoring(): void {
     // Clear existing interval
@@ -171,10 +230,51 @@ class YouTubeTracker {
     
     // Check playback state every 2 seconds
     this.playbackCheckInterval = window.setInterval(() => {
-      if (this.isBlocked) {
+      if (this.isBlocked && this.videoElement) {
         this.blockPlayback();
       }
     }, 2000);
+    
+    console.log('Started playback monitoring');
+  }
+  
+  private cleanup(): void {
+    console.log('Cleaning up YouTube tracker');
+    
+    if (this.playbackCheckInterval) {
+      clearInterval(this.playbackCheckInterval);
+      this.playbackCheckInterval = null;
+    }
+    
+    if (this.urlCheckInterval) {
+      window.clearInterval(this.urlCheckInterval);
+      this.urlCheckInterval = null;
+    }
+
+    if (this.observer) {
+      this.observer.disconnect();
+      this.observer = null;
+    }
+
+    this.removeBlockingOverlay();
+    
+    if (this.classificationDialog) {
+      this.classificationDialog.remove();
+      this.classificationDialog = null;
+    }
+    
+    if (this.setupDialog) {
+      this.setupDialog.remove();
+      this.setupDialog = null;
+    }
+    
+    // Reset state
+    this.currentVideoId = null;
+    this.currentUrl = '';
+    this.videoElement = null;
+    this.isBlocked = false;
+    
+    console.log('YouTube tracker cleanup completed');
   }
   
   private setupUrlChangeListener(): void {
@@ -215,8 +315,7 @@ class YouTubeTracker {
     // Listen for popstate (back/forward)
     window.addEventListener('popstate', checkUrlChange);
     
-    // Also check periodically in case YouTube updates URL without triggering events
-    setInterval(checkUrlChange, 1000);
+    console.log('URL change listener set up');
   }
   
   private setupMutationObserver(): void {
@@ -295,8 +394,37 @@ class YouTubeTracker {
     });
   }
   
+  private setupVisibilityListener(): void {
+    // Handle page visibility changes
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        console.log('Page became hidden');
+        // Notify service worker that user is not actively viewing
+        this.notifyVisibilityChange(false);
+      } else {
+        console.log('Page became visible');
+        // Notify service worker that user is actively viewing
+        this.notifyVisibilityChange(true);
+      }
+    });
+    
+    console.log('Visibility change listener set up');
+  }
+  
+  private async notifyVisibilityChange(isVisible: boolean): Promise<void> {
+    try {
+      await chrome.runtime.sendMessage({
+        type: 'VISIBILITY_CHANGE',
+        data: { isVisible, videoId: this.currentVideoId }
+      });
+    } catch (error) {
+      console.error('Error notifying visibility change:', error);
+    }
+  }
+  
   private getPlaybackState(): PlaybackState {
     if (!this.videoElement) {
+      console.log('No video element found for playback state');
       return {
         isPlaying: false,
         currentTime: 0,
@@ -307,13 +435,24 @@ class YouTubeTracker {
     }
     
     const video = this.videoElement;
-    return {
-      isPlaying: !video.paused && !video.ended && video.currentTime > 0,
-      currentTime: video.currentTime,
+    
+    // More accurate playing detection
+    const isPlaying = !video.paused && 
+                     !video.ended && 
+                     video.currentTime > 0 && 
+                     video.readyState >= 2 && // HAVE_CURRENT_DATA
+                     video.duration > 0;
+    
+    const state = {
+      isPlaying,
+      currentTime: video.currentTime || 0,
       duration: video.duration || 0,
       isPaused: video.paused,
       isMuted: video.muted
     };
+    
+    console.log('Playback state:', state);
+    return state;
   }
   
   private async notifyVideoDetected(videoId: string, url: string): Promise<void> {
@@ -805,25 +944,6 @@ class YouTubeTracker {
     });
     
     this.setupDialog = dialog;
-  }
-  
-  private cleanup(): void {
-    this.currentVideoId = null;
-    this.currentUrl = '';
-    this.videoElement = null;
-    this.isBlocked = false;
-    
-    if (this.playbackCheckInterval) {
-      window.clearInterval(this.playbackCheckInterval);
-      this.playbackCheckInterval = null;
-    }
-    
-    this.removeBlockingOverlay();
-    
-    if (this.classificationDialog) {
-      this.classificationDialog.remove();
-      this.classificationDialog = null;
-    }
   }
 }
 
