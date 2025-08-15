@@ -10,49 +10,26 @@ import {
   addTime,
   isFunTimeLimitExceeded,
   getRemainingFunTime,
-  addSessionToHistory,
-  type VideoSession
+  addSessionToHistory
 } from './utils/storage.js';
 
 import { 
   extractVideoId, 
-  classifyVideo,
-  type YouTubeVideoInfo 
+  classifyVideo
 } from './utils/youtube-api.js';
 
-// Message types for communication between service worker and content scripts
-export interface Message {
-  type: 'VIDEO_DETECTED' | 'TIME_UPDATE' | 'VIDEO_ENDED' | 'TAB_CLOSED' | 
-        'CLASSIFICATION_REQUEST' | 'CLASSIFICATION_RESPONSE' | 'BLOCK_VIDEO' | 
-        'GET_SETTINGS' | 'UPDATE_SETTINGS' | 'GET_STATS' | 'INIT_CHECK' | 'VISIBILITY_CHANGE';
-  data?: any;
-  tabId?: number;
-  videoId?: string;
-}
-
-interface TabSession {
-  tabId: number;
-  videoId: string;
-  url: string;
-  isBlocked: boolean;
-  startTime: number;
-  lastUpdateTime: number;
-  classification: 'study' | 'fun' | 'unknown';
-  isVisible: boolean;
-}
-
 // Track active sessions in memory for quick access
-const activeTabSessions = new Map<number, TabSession>();
+const activeTabSessions = new Map();
 
 // Track intervals for each tab
-const timeTrackingIntervals = new Map<number, number>();
+const timeTrackingIntervals = new Map();
 
 console.log('YouTube Study Tracker Service Worker Starting...');
 
 /**
  * Initialize the extension on startup
  */
-async function initialize(): Promise<void> {
+async function initialize() {
   try {
     console.log('Initializing extension storage...');
     await initializeStorage();
@@ -69,7 +46,7 @@ async function initialize(): Promise<void> {
 /**
  * Clean up sessions that may be left over from previous browser session
  */
-async function cleanupStaleSessions(): Promise<void> {
+async function cleanupStaleSessions() {
   try {
     const activeSessions = await getActiveSessions();
     
@@ -102,7 +79,7 @@ async function cleanupStaleSessions(): Promise<void> {
 /**
  * Handle video detection from content script
  */
-async function handleVideoDetected(message: Message, sender: chrome.runtime.MessageSender): Promise<void> {
+async function handleVideoDetected(message, sender) {
   if (!sender.tab?.id || !message.data?.url) {
     console.warn('Invalid video detection message:', message);
     return;
@@ -144,7 +121,7 @@ async function handleVideoDetected(message: Message, sender: chrome.runtime.Mess
     
     console.log('Video classification result:', classification);
     
-    let videoClassification: 'study' | 'fun' | 'unknown' = 'unknown';
+    let videoClassification = 'unknown';
     
     // Auto-classify if we have strong indicators
     if (classification.recommendedClassification === 'study') {
@@ -196,15 +173,9 @@ async function handleVideoDetected(message: Message, sender: chrome.runtime.Mess
 /**
  * Start a video session and begin time tracking
  */
-async function startVideoSession(
-  tabId: number, 
-  videoId: string, 
-  url: string, 
-  videoInfo: YouTubeVideoInfo | null, 
-  isStudy: boolean
-): Promise<void> {
+async function startVideoSession(tabId, videoId, url, videoInfo, isStudy) {
   try {
-    const session: VideoSession = {
+    const session = {
       videoId,
       title: videoInfo?.title || 'Unknown Video',
       category: videoInfo?.categoryName || 'Unknown',
@@ -239,10 +210,10 @@ async function startVideoSession(
 /**
  * Start time tracking for a tab
  */
-async function startTimeTracking(tabId: number): Promise<void> {
+async function startTimeTracking(tabId) {
   // Clear any existing interval
   if (timeTrackingIntervals.has(tabId)) {
-    clearInterval(timeTrackingIntervals.get(tabId)!);
+    clearInterval(timeTrackingIntervals.get(tabId));
   }
   
   // Start new tracking interval (update every 5 seconds)
@@ -254,7 +225,7 @@ async function startTimeTracking(tabId: number): Promise<void> {
       clearInterval(interval);
       timeTrackingIntervals.delete(tabId);
     }
-  }, 5000) as unknown as number;
+  }, 5000);
   
   timeTrackingIntervals.set(tabId, interval);
   console.log(`Started time tracking for tab ${tabId}`);
@@ -263,9 +234,9 @@ async function startTimeTracking(tabId: number): Promise<void> {
 /**
  * Stop time tracking for a tab
  */
-async function stopTimeTracking(tabId: number): Promise<void> {
+async function stopTimeTracking(tabId) {
   if (timeTrackingIntervals.has(tabId)) {
-    clearInterval(timeTrackingIntervals.get(tabId)!);
+    clearInterval(timeTrackingIntervals.get(tabId));
     timeTrackingIntervals.delete(tabId);
     console.log(`Stopped time tracking for tab ${tabId}`);
   }
@@ -277,7 +248,7 @@ async function stopTimeTracking(tabId: number): Promise<void> {
 /**
  * Handle visibility change from content script
  */
-async function handleVisibilityChange(message: Message, sender: chrome.runtime.MessageSender): Promise<void> {
+async function handleVisibilityChange(message, sender) {
   if (!sender.tab?.id) return;
   
   const tabId = sender.tab.id;
@@ -296,7 +267,7 @@ async function handleVisibilityChange(message: Message, sender: chrome.runtime.M
 /**
  * Update session time and check for fun time limit
  */
-async function updateSessionTime(tabId: number, isEnding: boolean = false): Promise<void> {
+async function updateSessionTime(tabId, isEnding = false) {
   try {
     const activeSessions = await getActiveSessions();
     const session = activeSessions[tabId.toString()];
@@ -335,7 +306,7 @@ async function updateSessionTime(tabId: number, isEnding: boolean = false): Prom
     }
     
     // Update session
-    const updatedSession: VideoSession = {
+    const updatedSession = {
       ...session,
       watchTime: timeElapsed,
       endTime: isEnding ? now : undefined
@@ -384,7 +355,7 @@ async function updateSessionTime(tabId: number, isEnding: boolean = false): Prom
 /**
  * Block a video by injecting blocking overlay
  */
-async function blockVideo(tabId: number, message: string): Promise<void> {
+async function blockVideo(tabId, message) {
   try {
     await chrome.tabs.sendMessage(tabId, {
       type: 'BLOCK_VIDEO',
@@ -411,7 +382,7 @@ async function blockVideo(tabId: number, message: string): Promise<void> {
 /**
  * Handle user classification response
  */
-async function handleClassificationResponse(message: Message, sender: chrome.runtime.MessageSender): Promise<void> {
+async function handleClassificationResponse(message, sender) {
   if (!sender.tab?.id || !message.data) return;
   
   const tabId = sender.tab.id;
@@ -440,7 +411,7 @@ async function handleClassificationResponse(message: Message, sender: chrome.run
 /**
  * Handle tab removal
  */
-async function handleTabRemoved(tabId: number): Promise<void> {
+async function handleTabRemoved(tabId) {
   console.log(`Tab ${tabId} removed`);
   
   try {
@@ -463,7 +434,7 @@ async function handleTabRemoved(tabId: number): Promise<void> {
 /**
  * Handle tab updates (URL changes, etc.)
  */
-async function handleTabUpdated(tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab): Promise<void> {
+async function handleTabUpdated(tabId, changeInfo, tab) {
   // Only handle complete URL changes to YouTube videos
   if (changeInfo.status === 'complete' && tab.url) {
     const videoId = extractVideoId(tab.url);
@@ -491,7 +462,7 @@ chrome.runtime.onStartup.addListener(initialize);
 chrome.runtime.onInstalled.addListener(initialize);
 
 // Message handling
-chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Service worker received message:', message.type, message.data);
   
   (async () => {
@@ -540,13 +511,19 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
           await handleVisibilityChange(message, sender);
           break;
           
+        case 'RESET_DATA':
+          const { resetAllData } = await import('./utils/storage.js');
+          await resetAllData();
+          sendResponse({ success: true });
+          break;
+          
         default:
           console.warn('Unknown message type:', message.type);
       }
-          } catch (error) {
-        console.error('Error handling message:', error);
-        sendResponse({ error: (error as Error).message });
-      }
+    } catch (error) {
+      console.error('Error handling message:', error);
+      sendResponse({ error: error.message });
+    }
   })();
   
   return true; // Keep message channel open for async response
