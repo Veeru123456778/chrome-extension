@@ -1,6 +1,24 @@
 // Content Script for YouTube Study Time Tracker Extension
 
-import { extractVideoId } from './utils/youtube-api.js';
+// Include extractVideoId function directly to avoid import issues
+function extractVideoId(url) {
+  if (!url) return null;
+  
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+    /youtube\.com\/v\/([^&\n?#]+)/,
+    /youtube\.com\/watch\?.*v=([^&\n?#]+)/
+  ];
+  
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  
+  return null;
+}
 
 class YouTubeTracker {
   constructor() {

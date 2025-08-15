@@ -1,22 +1,308 @@
 // Service Worker for YouTube Study Time Tracker Extension
 
-import { 
-  initializeStorage, 
-  getSettings, 
-  updateSettings,
-  getActiveSessions,
-  updateActiveSession,
-  removeActiveSession,
-  addTime,
-  isFunTimeLimitExceeded,
-  getRemainingFunTime,
-  addSessionToHistory
-} from './utils/storage.js';
+// Include storage functions directly to avoid import issues
+const DEFAULT_SETTINGS = {
+  studyArea: null,
+  funTimeLimit: 20,
+  isFirstTime: true,
+  notifications: true
+};
 
-import { 
-  extractVideoId, 
-  classifyVideo
-} from './utils/youtube-api.js';
+const DEFAULT_TIME_STATS = {
+  totalStudyTime: 0,
+  totalFunTime: 0,
+  dailyStudyTime: 0,
+  dailyFunTime: 0,
+  lastResetDate: new Date().toISOString().split('T')[0]
+};
+
+const STORAGE_KEYS = {
+  SETTINGS: 'settings',
+  TIME_STATS: 'timeStats',
+  ACTIVE_SESSIONS: 'activeSessions',
+  SESSION_HISTORY: 'sessionHistory'
+};
+
+async function getSettings() {
+  try {
+    const result = await chrome.storage.local.get(STORAGE_KEYS.SETTINGS);
+    return result.settings || DEFAULT_SETTINGS;
+  } catch (error) {
+    console.error('Error getting settings:', error);
+    return DEFAULT_SETTINGS;
+  }
+}
+
+async function updateSettings(updates) {
+  try {
+    const currentSettings = await getSettings();
+    const newSettings = { ...currentSettings, ...updates };
+    
+    await chrome.storage.local.set({ [STORAGE_KEYS.SETTINGS]: newSettings });
+    console.log('Settings updated:', newSettings);
+  } catch (error) {
+    console.error('Error updating settings:', error);
+    throw error;
+  }
+}
+
+async function getTimeStats() {
+  try {
+    const result = await chrome.storage.local.get(STORAGE_KEYS.TIME_STATS);
+    return result.timeStats || DEFAULT_TIME_STATS;
+  } catch (error) {
+    console.error('Error getting time stats:', error);
+    return DEFAULT_TIME_STATS;
+  }
+}
+
+async function addTime(isStudy, seconds) {
+  try {
+    const timeStats = await getTimeStats();
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Reset daily stats if it's a new day
+    if (timeStats.lastResetDate !== today) {
+      timeStats.dailyStudyTime = 0;
+      timeStats.dailyFunTime = 0;
+      timeStats.lastResetDate = today;
+    }
+    
+    // Add time
+    if (isStudy) {
+      timeStats.totalStudyTime += seconds;
+      timeStats.dailyStudyTime += seconds;
+    } else {
+      timeStats.totalFunTime += seconds;
+      timeStats.dailyFunTime += seconds;
+    }
+    
+    await chrome.storage.local.set({ [STORAGE_KEYS.TIME_STATS]: timeStats });
+    console.log(`Added ${seconds} seconds to ${isStudy ? 'study' : 'fun'} time`);
+  } catch (error) {
+    console.error('Error adding time:', error);
+    throw error;
+  }
+}
+
+async function getActiveSessions() {
+  try {
+    const result = await chrome.storage.local.get(STORAGE_KEYS.ACTIVE_SESSIONS);
+    return result.activeSessions || {};
+  } catch (error) {
+    console.error('Error getting active sessions:', error);
+    return {};
+  }
+}
+
+async function updateActiveSession(tabId, session) {
+  try {
+    const activeSessions = await getActiveSessions();
+    activeSessions[tabId.toString()] = session;
+    
+    await chrome.storage.local.set({ [STORAGE_KEYS.ACTIVE_SESSIONS]: activeSessions });
+    console.log(`Updated active session for tab ${tabId}`);
+  } catch (error) {
+    console.error('Error updating active session:', error);
+    throw error;
+  }
+}
+
+async function removeActiveSession(tabId) {
+  try {
+    const activeSessions = await getActiveSessions();
+    const session = activeSessions[tabId.toString()];
+    
+    if (session) {
+      delete activeSessions[tabId.toString()];
+      await chrome.storage.local.set({ [STORAGE_KEYS.ACTIVE_SESSIONS]: activeSessions });
+      console.log(`Removed active session for tab ${tabId}`);
+      return session;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error removing active session:', error);
+    throw error;
+  }
+}
+
+async function addSessionToHistory(session) {
+  try {
+    const result = await chrome.storage.local.get(STORAGE_KEYS.SESSION_HISTORY);
+    const sessionHistory = result.sessionHistory || [];
+    
+    // Add session to history
+    sessionHistory.push({
+      ...session,
+      endTime: session.endTime || Date.now()
+    });
+    
+    // Keep only last 100 sessions
+    if (sessionHistory.length > 100) {
+      sessionHistory.splice(0, sessionHistory.length - 100);
+    }
+    
+    await chrome.storage.local.set({ [STORAGE_KEYS.SESSION_HISTORY]: sessionHistory });
+    console.log('Added session to history:', session.title);
+  } catch (error) {
+    console.error('Error adding session to history:', error);
+    throw error;
+  }
+}
+
+async function isFunTimeLimitExceeded() {
+  try {
+    const settings = await getSettings();
+    const timeStats = await getTimeStats();
+    
+    // Calculate fun time limit based on study time
+    const studyTimeHours = timeStats.dailyStudyTime / 3600; // Convert to hours
+    const funTimeLimitMinutes = settings.funTimeLimit * studyTimeHours;
+    const funTimeLimitSeconds = funTimeLimitMinutes * 60;
+    
+    // Add a base allowance of 10 minutes
+    const totalFunTimeLimit = funTimeLimitSeconds + (10 * 60);
+    
+    console.log(`Fun time check: ${timeStats.dailyFunTime}s / ${totalFunTimeLimit}s limit`);
+    
+    return timeStats.dailyFunTime >= totalFunTimeLimit;
+  } catch (error) {
+    console.error('Error checking fun time limit:', error);
+    return false;
+  }
+}
+
+async function getRemainingFunTime() {
+  try {
+    const settings = await getSettings();
+    const timeStats = await getTimeStats();
+    
+    // Calculate fun time limit based on study time
+    const studyTimeHours = timeStats.dailyStudyTime / 3600; // Convert to hours
+    const funTimeLimitMinutes = settings.funTimeLimit * studyTimeHours;
+    const funTimeLimitSeconds = funTimeLimitMinutes * 60;
+    
+    // Add a base allowance of 10 minutes
+    const totalFunTimeLimit = funTimeLimitSeconds + (10 * 60);
+    
+    const remaining = Math.max(0, totalFunTimeLimit - timeStats.dailyFunTime);
+    return Math.floor(remaining / 60); // Return in minutes
+  } catch (error) {
+    console.error('Error getting remaining fun time:', error);
+    return 0;
+  }
+}
+
+async function resetAllData() {
+  try {
+    await chrome.storage.local.clear();
+    await initializeStorage();
+    console.log('All data reset successfully');
+  } catch (error) {
+    console.error('Error resetting data:', error);
+    throw error;
+  }
+}
+
+async function initializeStorage() {
+  try {
+    const keys = [STORAGE_KEYS.SETTINGS, STORAGE_KEYS.TIME_STATS, STORAGE_KEYS.ACTIVE_SESSIONS, STORAGE_KEYS.SESSION_HISTORY];
+    const result = await chrome.storage.local.get(keys);
+    
+    const updates = {};
+    
+    if (!result.settings) {
+      updates.settings = DEFAULT_SETTINGS;
+    }
+    
+    if (!result.timeStats) {
+      updates.timeStats = DEFAULT_TIME_STATS;
+    } else {
+      // Check if we need to reset daily stats
+      const timeStats = result.timeStats;
+      const today = new Date().toISOString().split('T')[0];
+      if (timeStats.lastResetDate !== today) {
+        updates.timeStats = {
+          ...timeStats,
+          dailyStudyTime: 0,
+          dailyFunTime: 0,
+          lastResetDate: today
+        };
+      }
+    }
+    
+    if (!result.activeSessions) {
+      updates.activeSessions = {};
+    }
+    
+    if (!result.sessionHistory) {
+      updates.sessionHistory = [];
+    }
+    
+    // Apply updates if any
+    if (Object.keys(updates).length > 0) {
+      await chrome.storage.local.set(updates);
+    }
+    
+    console.log('Storage initialized successfully');
+  } catch (error) {
+    console.error('Error initializing storage:', error);
+    throw error;
+  }
+}
+
+// Include video classification functions
+function extractVideoId(url) {
+  if (!url) return null;
+  
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+    /youtube\.com\/v\/([^&\n?#]+)/,
+    /youtube\.com\/watch\?.*v=([^&\n?#]+)/
+  ];
+  
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  
+  return null;
+}
+
+async function classifyVideo(videoId, studyArea, apiKey) {
+  try {
+    console.log(`Classifying video ${videoId} for study area: ${studyArea}`);
+    
+    // Simple classification without API for now
+    return {
+      videoInfo: {
+        title: 'Unknown Video',
+        categoryName: 'Unknown',
+        categoryId: 0
+      },
+      isEducationalCategory: false,
+      isRelatedToStudyArea: false,
+      recommendedClassification: 'unknown',
+      confidence: 0.5
+    };
+  } catch (error) {
+    console.error('Error classifying video:', error);
+    return {
+      videoInfo: {
+        title: 'Error classifying video',
+        categoryName: 'Unknown',
+        categoryId: 0
+      },
+      isEducationalCategory: false,
+      isRelatedToStudyArea: false,
+      recommendedClassification: 'unknown',
+      confidence: 0.0
+    };
+  }
+}
 
 // Track active sessions in memory for quick access
 const activeTabSessions = new Map();
@@ -479,7 +765,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   if (message.type === 'GET_STATS') {
     Promise.all([
-      import('./utils/storage.js').then(module => module.getTimeStats()),
+      getTimeStats(),
       getRemainingFunTime()
     ]).then(([stats, remaining]) => {
       console.log('Sending stats:', { stats, remainingFunTime: remaining });
@@ -518,7 +804,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   
   if (message.type === 'RESET_DATA') {
-    import('./utils/storage.js').then(module => module.resetAllData()).then(() => {
+    resetAllData().then(() => {
       console.log('Data reset successfully');
       sendResponse({ success: true });
     }).catch(error => {
