@@ -1,122 +1,166 @@
-# Extension Testing Guide
+# Testing the YouTube Study Tracker Extension
 
-## Quick Test Steps
+## Pre-Testing Setup
 
-### 1. Load the Extension
-1. Open Chrome and go to `chrome://extensions/`
-2. Enable "Developer mode" (toggle in top right)
-3. Click "Load unpacked"
-4. Select the `dist` folder from this project
-5. Verify the extension appears in your extensions list
-
-### 2. Initial Setup Test
-1. Open a YouTube video page (e.g., `https://www.youtube.com/watch?v=dQw4w9WgXcQ`)
-2. You should see a setup dialog asking for your study area
-3. Select a study area (e.g., "Computer Science")
-4. Set fun time limit (default: 20 minutes)
-5. Click "Save Settings"
-
-### 3. Video Detection Test
-1. Open a different YouTube video
-2. Check the browser console (F12) for these messages:
-   ```
-   YouTube Study Tracker Content Script Starting...
-   Initial video page detected
-   New video detected: [video-id]
-   Found video element: [selector]
-   Video event listeners set up
-   Started playback monitoring
+1. **Build the extension**:
+   ```bash
+   npm run build
    ```
 
-### 4. Service Worker Test
-1. Check the service worker console for:
-   ```
-   YouTube Study Tracker Service Worker Starting...
-   Extension initialized successfully
-   Service worker received message: VIDEO_DETECTED
-   Video detected in tab [tab-id]: [video-id]
-   ```
+2. **Load in Chrome**:
+   - Go to `chrome://extensions/`
+   - Enable Developer mode
+   - Click "Load unpacked"
+   - Select the `public` folder
 
-### 5. Time Tracking Test
-1. Play a video for at least 10 seconds
-2. Check console for time tracking messages:
-   ```
-   Adding [X] seconds of [study/fun] time for tab [tab-id]
-   ```
-3. Click the extension icon to see updated stats
+3. **Open Developer Tools**:
+   - Press F12 to open DevTools
+   - Go to Console tab to see extension logs
 
-### 6. Fun Time Limit Test
-1. Watch entertainment videos until you reach your fun time limit
-2. You should see a blocking overlay appear
-3. The video should be blocked from playing
+## Test Scenarios
 
-## Expected Behavior
+### 1. Initial Setup Test
+- [ ] Click the extension icon
+- [ ] Verify setup screen appears
+- [ ] Select a study area (e.g., Computer Science)
+- [ ] Set fun time limit to 20 minutes
+- [ ] Click "Get Started"
+- [ ] Verify dashboard appears
 
-### ✅ Working Correctly
-- Extension icon appears in toolbar
-- Setup dialog appears on first video visit
-- Video detection messages in console
-- Time tracking updates in real-time
-- Stats update in popup
-- Fun time limits enforced
+### 2. Video Detection Test
+- [ ] Go to YouTube and open any video
+- [ ] Check console for "Video detected" message
+- [ ] Verify extension shows "Tracking study/fun time" notification
+- [ ] Check extension popup shows updated stats
 
-### ❌ Issues to Check
-- No console messages: Check if content script is loading
-- No video detection: Verify you're on a YouTube video page
-- No time tracking: Check if video is playing and tab is visible
-- Extension not loading: Verify manifest.json and file paths
+### 3. Study Video Classification Test
+- [ ] Open an educational video (e.g., programming tutorial)
+- [ ] Verify it's classified as "study" automatically
+- [ ] Check that study time increases in dashboard
+- [ ] Verify no blocking overlay appears
 
-## Debug Information
+### 4. Fun Video Classification Test
+- [ ] Open an entertainment video (e.g., music video, comedy)
+- [ ] Verify it's classified as "fun" automatically
+- [ ] Check that fun time increases in dashboard
+- [ ] Watch until fun time limit is reached
+- [ ] Verify blocking overlay appears
 
-### Console Messages to Look For
+### 5. Manual Classification Test
+- [ ] Open a video that's unclear (e.g., news, mixed content)
+- [ ] Verify classification dialog appears
+- [ ] Choose "Study Video" or "Fun Video"
+- [ ] Verify tracking starts correctly
+
+### 6. Time Tracking Accuracy Test
+- [ ] Open a study video
+- [ ] Play for exactly 60 seconds
+- [ ] Check dashboard shows ~1 minute of study time
+- [ ] Pause video and verify time stops counting
+- [ ] Switch tabs and verify time stops counting
+
+### 7. Fun Time Limit Test
+- [ ] Watch study videos to accumulate study time
+- [ ] Then watch fun videos until limit is reached
+- [ ] Verify blocking overlay appears
+- [ ] Check overlay message is correct
+- [ ] Click "Close" and verify video is unblocked
+
+### 8. Settings Test
+- [ ] Go to Settings tab in extension
+- [ ] Change study area
+- [ ] Adjust fun time limit
+- [ ] Toggle notifications
+- [ ] Verify changes are saved
+
+### 9. Data Persistence Test
+- [ ] Accumulate some study/fun time
+- [ ] Close and reopen browser
+- [ ] Verify data is still there
+- [ ] Check daily stats reset at midnight
+
+### 10. Multiple Tabs Test
+- [ ] Open YouTube videos in multiple tabs
+- [ ] Verify each tab is tracked independently
+- [ ] Close tabs and verify sessions end properly
+
+## Expected Console Messages
+
+### Service Worker
 ```
-Content Script:
-- "YouTube Study Tracker Content Script Starting..."
-- "Initial video page detected"
-- "New video detected: [video-id]"
-- "Found video element: [selector]"
-- "Playback state: {isPlaying: true, ...}"
-
-Service Worker:
-- "YouTube Study Tracker Service Worker Starting..."
-- "Extension initialized successfully"
-- "Video detected in tab [tab-id]: [video-id]"
-- "Adding [X] seconds of [study/fun] time"
+YouTube Study Tracker Service Worker Starting...
+Storage initialized successfully
+Extension initialized successfully
+Video detected in tab [ID]: [videoId]
+Started study/fun session for video: [title]
+Adding [X] seconds of study/fun time for tab [ID]
+Fun time limit exceeded, blocking video
 ```
 
-### Common Error Messages
+### Content Script
 ```
-- "No video element found": YouTube page not fully loaded
-- "Could not get playback state": Content script communication issue
-- "No active session found": Session management issue
-- "Fun time limit exceeded": Working as intended
+YouTube Study Tracker Content Script Starting...
+Initial video page detected
+New video page loaded: [videoId]
+Setting up video tracking for element: [element]
+Video started playing
+Notified service worker about video detection
 ```
 
-## Testing Checklist
+## Common Issues and Solutions
 
-- [ ] Extension loads without errors
-- [ ] Setup dialog appears on first visit
-- [ ] Video detection works on different videos
-- [ ] Time tracking counts only when playing
-- [ ] Stats update in popup
-- [ ] Fun time limits work
-- [ ] Video blocking overlay appears
-- [ ] Multiple tabs handled correctly
-- [ ] Extension survives page refresh
-- [ ] Cleanup works when leaving YouTube
+### Issue: Extension not loading
+**Solution**: Check manifest.json is valid, ensure all files are in public folder
 
-## Performance Notes
+### Issue: Videos not detected
+**Solution**: Verify content script is running, check URL patterns match
 
-- Time tracking updates every 5 seconds
-- URL checking every 2 seconds
-- Playback monitoring every 2 seconds
-- Console logs help verify timing
+### Issue: Time not tracking
+**Solution**: Check video element detection, verify service worker is active
 
-## Troubleshooting
+### Issue: Stats not updating
+**Solution**: Check storage permissions, verify message passing works
 
-If tests fail:
-1. Check browser console for errors
-2. Reload the extension
-3. Clear browser cache
-4. Verify all files are in the dist folder
-5. Check manifest.json permissions
+### Issue: Blocking not working
+**Solution**: Check fun time calculation, verify overlay injection
+
+## Performance Testing
+
+- [ ] Extension loads quickly (< 2 seconds)
+- [ ] Video detection is responsive (< 1 second)
+- [ ] Time tracking is accurate (±5 seconds)
+- [ ] Dashboard updates smoothly
+- [ ] No memory leaks after extended use
+
+## Browser Compatibility
+
+- [ ] Chrome (latest)
+- [ ] Edge (latest)
+- [ ] Other Chromium-based browsers
+
+## Security Testing
+
+- [ ] No sensitive data in console logs
+- [ ] API keys are stored securely
+- [ ] No XSS vulnerabilities in overlays
+- [ ] Proper permission usage
+
+## Final Verification
+
+After completing all tests:
+
+1. **Check all functionality works** as expected
+2. **Verify no console errors** remain
+3. **Test edge cases** (network issues, rapid tab switching)
+4. **Document any issues** found
+5. **Extension is ready** for use
+
+## Reporting Issues
+
+If you find issues:
+
+1. **Note the exact steps** to reproduce
+2. **Include console logs** and error messages
+3. **Specify browser version** and OS
+4. **Describe expected vs actual behavior**
+5. **Include screenshots** if relevant
