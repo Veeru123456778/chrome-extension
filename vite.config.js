@@ -1,10 +1,28 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
+import { copyFileSync, mkdirSync } from 'fs'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'copy-extension-files',
+      writeBundle() {
+        // Copy manifest.json and icons to dist
+        try {
+          copyFileSync('public/manifest.json', 'dist/manifest.json')
+          copyFileSync('public/icon16.png', 'dist/icon16.png')
+          copyFileSync('public/icon48.png', 'dist/icon48.png')
+          copyFileSync('public/icon128.png', 'dist/icon128.png')
+          console.log('Extension files copied successfully')
+        } catch (error) {
+          console.error('Error copying extension files:', error)
+        }
+      }
+    }
+  ],
   build: {
     rollupOptions: {
       input: {
