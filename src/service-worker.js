@@ -465,6 +465,70 @@ chrome.runtime.onInstalled.addListener(initialize);
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Service worker received message:', message.type, message.data);
   
+  // Handle async responses properly
+  if (message.type === 'GET_SETTINGS') {
+    getSettings().then(settings => {
+      console.log('Sending settings:', settings);
+      sendResponse(settings);
+    }).catch(error => {
+      console.error('Error getting settings:', error);
+      sendResponse({ error: error.message });
+    });
+    return true;
+  }
+  
+  if (message.type === 'GET_STATS') {
+    Promise.all([
+      import('./utils/storage.js').then(module => module.getTimeStats()),
+      getRemainingFunTime()
+    ]).then(([stats, remaining]) => {
+      console.log('Sending stats:', { stats, remainingFunTime: remaining });
+      sendResponse({ stats, remainingFunTime: remaining });
+    }).catch(error => {
+      console.error('Error getting stats:', error);
+      sendResponse({ error: error.message });
+    });
+    return true;
+  }
+  
+  if (message.type === 'UPDATE_SETTINGS') {
+    updateSettings(message.data).then(() => {
+      console.log('Settings updated successfully');
+      sendResponse({ success: true });
+    }).catch(error => {
+      console.error('Error updating settings:', error);
+      sendResponse({ error: error.message });
+    });
+    return true;
+  }
+  
+  if (message.type === 'INIT_CHECK') {
+    getSettings().then(currentSettings => {
+      const response = { 
+        isFirstTime: currentSettings.isFirstTime,
+        hasStudyArea: !!currentSettings.studyArea 
+      };
+      console.log('Sending init check:', response);
+      sendResponse(response);
+    }).catch(error => {
+      console.error('Error in init check:', error);
+      sendResponse({ error: error.message });
+    });
+    return true;
+  }
+  
+  if (message.type === 'RESET_DATA') {
+    import('./utils/storage.js').then(module => module.resetAllData()).then(() => {
+      console.log('Data reset successfully');
+      sendResponse({ success: true });
+    }).catch(error => {
+      console.error('Error resetting data:', error);
+      sendResponse({ error: error.message });
+    });
+    return true;
+  }
+  
+  // Handle non-response messages
   (async () => {
     try {
       switch (message.type) {
@@ -482,39 +546,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
           break;
           
-        case 'GET_SETTINGS':
-          const settings = await getSettings();
-          sendResponse(settings);
-          break;
-          
-        case 'UPDATE_SETTINGS':
-          await updateSettings(message.data);
-          sendResponse({ success: true });
-          break;
-          
-        case 'GET_STATS':
-          const { getTimeStats } = await import('./utils/storage.js');
-          const stats = await getTimeStats();
-          const remaining = await getRemainingFunTime();
-          sendResponse({ stats, remainingFunTime: remaining });
-          break;
-          
-        case 'INIT_CHECK':
-          const currentSettings = await getSettings();
-          sendResponse({ 
-            isFirstTime: currentSettings.isFirstTime,
-            hasStudyArea: !!currentSettings.studyArea 
-          });
-          break;
-          
         case 'VISIBILITY_CHANGE':
           await handleVisibilityChange(message, sender);
-          break;
-          
-        case 'RESET_DATA':
-          const { resetAllData } = await import('./utils/storage.js');
-          await resetAllData();
-          sendResponse({ success: true });
           break;
           
         default:
@@ -522,11 +555,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     } catch (error) {
       console.error('Error handling message:', error);
-      sendResponse({ error: error.message });
     }
   })();
   
-  return true; // Keep message channel open for async response
+  return false; // No async response for these messages
 });
 
 // Tab event listeners

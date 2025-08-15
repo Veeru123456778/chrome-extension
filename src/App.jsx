@@ -44,14 +44,49 @@ const App = () => {
 
   const loadData = async () => {
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'GET_STATS' });
-      const settingsResponse = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
+      console.log('Loading data from service worker...');
+      
+      // Add timeout to prevent hanging
+      const sendMessageWithTimeout = (message, timeout = 5000) => {
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            reject(new Error('Message timeout'));
+          }, timeout);
+          
+          chrome.runtime.sendMessage(message, (response) => {
+            clearTimeout(timer);
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+            } else {
+              resolve(response);
+            }
+          });
+        });
+      };
+      
+      const response = await sendMessageWithTimeout({ type: 'GET_STATS' });
+      console.log('Stats response:', response);
+      
+      const settingsResponse = await sendMessageWithTimeout({ type: 'GET_SETTINGS' });
+      console.log('Settings response:', settingsResponse);
+      
+      if (!response || !settingsResponse) {
+        throw new Error('No response from service worker');
+      }
+      
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      
+      if (settingsResponse.error) {
+        throw new Error(settingsResponse.error);
+      }
       
       setData(prevData => ({
         ...prevData,
-        stats: response.stats,
-        settings: settingsResponse,
-        remainingFunTime: response.remainingFunTime,
+        stats: response.stats || prevData.stats,
+        settings: settingsResponse || prevData.settings,
+        remainingFunTime: response.remainingFunTime || 0,
         isLoading: false,
         error: undefined
       }));
@@ -60,7 +95,7 @@ const App = () => {
       setData(prevData => ({
         ...prevData,
         isLoading: false,
-        error: 'Failed to load data'
+        error: `Failed to load data: ${error.message}`
       }));
     }
   };
