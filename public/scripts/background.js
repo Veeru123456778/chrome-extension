@@ -1,6 +1,6 @@
-const CLIENT_ID = '11577713610-hikcmikgrqtvreloovjeb23ofep4m7l3.apps.googleusercontent.com';
-const SCOPES = ['https://www.googleapis.com/auth/youtube.readonly'];
-const apiKey = 'AIzaSyBzH896zzsU0X15sxh6o6KVLFK7oa5LJbI'; 
+const CLIENT_ID = process.env.CLIENT_ID;
+const SCOPES = process.env.SCOPES;
+const apiKey = process.env.API_KEY; 
 
 
 let activeTabId = null;
